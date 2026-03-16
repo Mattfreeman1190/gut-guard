@@ -18,7 +18,7 @@ const App = () => {
     setResult(null);
     
     // Stable model ID for 2026 production
-    const modelName = "gemini-2.0-flash"; 
+    const modelName = "gemini-2.5-flash"; 
     
     const modeDesc = mode === 'flare' ? "active IBD flare (low-residue diet)" : "IBD remission (anti-inflammatory focus)";
     const coeliacLogic = isCoeliac 
@@ -31,7 +31,7 @@ const App = () => {
     try {
       if (!apiKey) throw new Error("API Key missing in Vercel settings.");
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
+const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${apiKey}`, {        
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
