@@ -11,7 +11,7 @@ const App = () => {
 
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-  const handleSearch = async (foodName = query) => {
+const handleSearch = async (foodName = query) => {
     if (!foodName.trim()) return;
     setLoading(true);
     setError("");
@@ -35,5 +35,20 @@ const App = () => {
       });
 
       const data = await response.json();
+      
+      if (!data.candidates || !data.candidates[0]) {
+        throw new Error("Invalid response from AI");
+      }
+
       const text = data.candidates[0].content.parts[0].text;
-      const cleanJson = text.replace(/
+      // This is the line that was broken in your logs:
+      const cleanJson = text.replace(/```json|```/g, "").trim();
+      
+      setResult(JSON.parse(cleanJson));
+    } catch (err) {
+      console.error(err);
+      setError("Error analyzing food. Check your API key or try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
