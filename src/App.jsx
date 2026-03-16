@@ -9,7 +9,6 @@ const App = () => {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
 
-  // This pulls your secret key from Vercel's Environment Variables
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
   const handleSearch = async (foodName = query) => {
@@ -18,19 +17,22 @@ const App = () => {
     setError("");
     setResult(null);
     
-    // Config for the AI
-    const modelVersion = "gemini-3-flash"; 
+    // Stable production model for 2026
+    const modelVersion = "gemini-2.0-flash"; 
+    
     const modeDesc = mode === 'flare' ? "active IBD flare-up (low-residue diet)" : "IBD remission (anti-inflammatory/Mediterranean focus)";
+    
     const coeliacLogic = isCoeliac 
       ? `CRITICAL: User has Coeliac Disease. 
          1. If "${foodName}" is a specific brand/product known to contain gluten (e.g., Weetabix, Guinness, standard Oreos), set score to 0 and status to "Avoid".
          2. If "${foodName}" is generic (e.g., Toast, Pasta), assume they are eating the Gluten-Free version and analyze how those GF ingredients affect IBD.` 
       : "User does NOT have Coeliac Disease.";
     
-    const prompt = `You are a clinical dietitian. Analyze the food "${foodName}" for a user in ${modeDesc}.
+    const prompt = `You are a clinical dietitian specializing in IBD and Coeliac disease. 
+    Analyze the food "${foodName}" for a user in ${modeDesc}.
     ${coeliacLogic}
     
-    Return ONLY a raw JSON object with this structure:
+    Return ONLY a raw JSON object with this exact structure:
     {
       "foodName": "${foodName}",
       "score": 0-100,
@@ -43,7 +45,7 @@ const App = () => {
 
     try {
       if (!apiKey) {
-        throw new Error("API Key is missing in Vercel settings. Please check your Environment Variables.");
+        throw new Error("API Key is missing in Vercel settings.");
       }
 
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelVersion}:generateContent?key=${apiKey}`, {
@@ -52,23 +54,22 @@ const App = () => {
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || "Failed to reach the research database.");
+        throw new Error(data.error?.message || "Model connection failed.");
       }
 
-      const data = await response.json();
       const rawText = data.candidates[0].content.parts[0].text;
       
-      // Clean JSON string - finds the first '{' and last '}'
+      // Robust JSON extraction
       const start = rawText.indexOf('{');
       const end = rawText.lastIndexOf('}') + 1;
-      if (start === -1) throw new Error("The research database returned an invalid format. Try again.");
+      if (start === -1) throw new Error("Could not read research data. Please try again.");
       
       const jsonString = rawText.slice(start, end);
       setResult(JSON.parse(jsonString));
     } catch (err) {
-      console.error(err);
       setError(err.message || "An unexpected error occurred.");
     } finally {
       setLoading(false);
@@ -89,10 +90,10 @@ const App = () => {
             <Shield className="w-8 h-8" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-800">Gut Guard</h1>
-          <p className="text-slate-500 mt-2">Personalized Research-Based Food Safety</p>
+          <p className="text-slate-500 mt-2">Precision IBD & Coeliac Food Safety</p>
         </header>
 
-        {/* Control Panel */}
+        {/* Mode Toggles */}
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mb-6 space-y-4">
           <div className="flex flex-col sm:flex-row justify-between gap-4">
             <div className="flex bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
@@ -110,7 +111,7 @@ const App = () => {
               </button>
             </div>
             
-            <div className="flex items-center justify-between gap-3 bg-slate-50 p-2 rounded-xl border border-slate-100">
+            <div className="flex items-center justify-between gap-3 bg-slate-50 p-2 rounded-xl border border-slate-100 px-4">
               <div className="flex items-center gap-2">
                 <WheatOff className={`w-4 h-4 ${isCoeliac ? 'text-amber-600' : 'text-slate-400'}`} />
                 <span className={`text-sm font-bold ${isCoeliac ? 'text-slate-800' : 'text-slate-400'}`}>Coeliac Mode</span>
@@ -125,12 +126,12 @@ const App = () => {
           </div>
         </div>
 
-        {/* Search Bar */}
+        {/* Input */}
         <div className="relative mb-8">
           <input 
             type="text" 
-            className="w-full bg-white border border-slate-200 rounded-2xl py-5 pl-6 pr-32 outline-none shadow-md focus:ring-2 focus:ring-indigo-500 transition-all text-lg" 
-            placeholder={isCoeliac ? "Search food (GF assumed)..." : "Search food (e.g. Weetabix)..."} 
+            className="w-full bg-white border border-slate-200 rounded-2xl py-5 pl-6 pr-32 outline-none shadow-md focus:ring-2 focus:ring-indigo-500 text-lg" 
+            placeholder={isCoeliac ? "Search (GF assumed)..." : "Search (e.g. Weetabix)..."} 
             value={query} 
             onChange={(e) => setQuery(e.target.value)} 
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()} 
@@ -138,21 +139,19 @@ const App = () => {
           <button 
             onClick={() => handleSearch()} 
             disabled={loading} 
-            className="absolute right-2 top-2 bottom-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 rounded-xl font-bold transition-all disabled:opacity-50 flex items-center gap-2"
+            className="absolute right-2 top-2 bottom-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 rounded-xl font-bold flex items-center gap-2"
           >
             {loading ? <RefreshCw className="w-5 h-5 animate-spin" /> : "Analyze"}
           </button>
         </div>
 
-        {/* Error Display */}
         {error && (
-          <div className="bg-rose-50 border border-rose-200 p-4 rounded-2xl flex items-center gap-3 text-rose-700 mb-6 animate-pulse">
+          <div className="bg-rose-50 border border-rose-200 p-4 rounded-2xl flex items-center gap-3 text-rose-700 mb-6">
             <AlertTriangle className="w-5 h-5 flex-shrink-0" />
             <p className="text-sm font-medium">{error}</p>
           </div>
         )}
 
-        {/* Results Card */}
         {result && !loading && (
           <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className={`p-6 border-b flex items-center justify-between ${getScoreColor(result.score)}`}>
@@ -162,60 +161,46 @@ const App = () => {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold">{result.foodName}</h2>
-                  <p className="text-sm font-bold uppercase tracking-tight opacity-70">
-                    {mode} {isCoeliac ? "• Coeliac Protected" : ""}
-                  </p>
+                  <p className="text-xs font-black uppercase opacity-70 tracking-widest">{mode} {isCoeliac ? "• COELIAC" : ""}</p>
                 </div>
               </div>
               <div className="text-center">
                 <div className="text-4xl font-black">{result.score}</div>
-                <div className="text-[10px] font-bold opacity-60">SCORE</div>
+                <div className="text-[10px] font-bold opacity-60 uppercase">Score</div>
               </div>
             </div>
 
             <div className="p-6 space-y-6">
-              <section>
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Clinical Analysis</h3>
-                <p className="text-slate-700 leading-relaxed">{result.reasoning}</p>
-              </section>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <section>
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Dietary Tips</h3>
-                  <ul className="space-y-2">
-                    {result.tips?.map((t, i) => (
-                      <li key={i} className="text-sm text-slate-600 flex items-start gap-2">
-                        <span className="text-indigo-500 font-bold">•</span> {t}
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-                <section>
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Safe Alternatives</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {result.alternatives?.map((a, i) => (
-                      <span key={i} className="bg-slate-100 text-slate-600 px-3 py-1 rounded-lg text-xs font-bold border border-slate-200">
-                        {a}
-                      </span>
-                    ))}
-                  </div>
-                </section>
+              <div>
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 italic">Clinical Analysis</h3>
+                <p className="text-slate-700 leading-relaxed text-sm">{result.reasoning}</p>
               </div>
 
-              <div className="pt-4 border-t border-slate-50 flex flex-wrap gap-4">
-                {result.references?.map((ref, i) => (
-                  <span key={i} className="text-[10px] font-bold text-slate-400 flex items-center gap-1 uppercase">
-                    <ExternalLink className="w-3 h-3" /> {ref}
-                  </span>
-                ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-50">
+                <div>
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 italic">Dietary Tips</h3>
+                  <ul className="space-y-2">
+                    {result.tips?.map((t, i) => (
+                      <li key={i} className="text-xs text-slate-600 flex items-start gap-2">• {t}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 italic">Swaps</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {result.alternatives?.map((a, i) => (
+                      <span key={i} className="bg-slate-50 text-slate-600 px-3 py-1 rounded-lg text-[10px] font-bold border border-slate-200">{a}</span>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         )}
-
-        <footer className="mt-12 text-center text-[10px] text-slate-400 uppercase tracking-widest leading-loose">
-          Not medical advice. Consult a doctor before dietary changes.<br/>
-          Powered by Clinical Research Database 2026
+        
+        <footer className="mt-12 text-center text-[9px] text-slate-400 uppercase tracking-widest leading-loose">
+          Not medical advice. Consult a specialist for dietary changes.<br/>
+          GUT GUARD ANALYTICS ENGINE 2026
         </footer>
       </div>
     </div>
