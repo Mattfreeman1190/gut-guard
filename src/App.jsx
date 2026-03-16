@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, Flame, WheatOff, RefreshCw, AlertTriangle, CheckCircle, HelpCircle } from 'lucide-react';
+import { Search, Info, AlertTriangle, CheckCircle, Flame, Shield, HelpCircle, ExternalLink, RefreshCw, WheatOff } from 'lucide-react';
 
 const App = () => {
   const [query, setQuery] = useState("");
@@ -17,36 +17,38 @@ const App = () => {
     setError("");
     setResult(null);
     
-    // Using the -latest suffix is the secret to fixing the "not found" error
-    const modelName = "gemini-1.5-flash-latest"; 
+    // Stable model ID for 2026 production
+    const modelName = "gemini-2.0-flash"; 
     
-    const modeDesc = mode === 'flare' ? "active IBD flare (low-residue)" : "IBD remission (anti-inflammatory)";
+    const modeDesc = mode === 'flare' ? "active IBD flare (low-residue diet)" : "IBD remission (anti-inflammatory focus)";
     const coeliacLogic = isCoeliac 
-      ? `User has Coeliac. 1. If "${query}" is a gluten-containing brand (e.g. Weetabix), score 0. 2. If generic, assume GF version.` 
+      ? `User has Coeliac Disease. 1. If "${query}" is a brand/product with gluten (e.g. Weetabix, standard bread), score 0. 2. If generic, assume they eat the GF version.` 
       : "No Coeliac.";
 
     const prompt = `Analyze ${query} for IBD ${modeDesc}. ${coeliacLogic} 
-    Return ONLY JSON: {"foodName": "${query}", "score": 0-100, "status": "Safe"|"Caution"|"Avoid", "reasoning": "string", "tips": ["string"], "alternatives": ["string"], "references": ["string"]}`;
+    Return ONLY a JSON object: {"foodName": "${query}", "score": 0-100, "status": "Safe"|"Caution"|"Avoid", "reasoning": "string", "tips": ["string"], "alternatives": ["string"], "references": ["string"]}`;
 
     try {
-      if (!apiKey) throw new Error("API Key missing from Vercel. Add VITE_GEMINI_API_KEY to Environment Variables.");
+      if (!apiKey) throw new Error("API Key missing in Vercel settings.");
 
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { response_mime_type: "application/json" } // This forces JSON output in 2026
+          generationConfig: { 
+            response_mime_type: "application/json",
+            temperature: 0.1
+          } 
         })
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error?.message || "Google API Error. Check your key.");
+        throw new Error(data.error?.message || "Check your API key or Quota.");
       }
 
-      // Modern Gemini 1.5/2.0 returns text which we then parse
       const rawText = data.candidates[0].content.parts[0].text;
       setResult(JSON.parse(rawText));
     } catch (err) {
@@ -73,6 +75,7 @@ const App = () => {
           <p className="text-slate-500 mt-1">Clinical IBD & Coeliac Assistant</p>
         </header>
 
+        {/* Controls */}
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mb-6 flex flex-col sm:flex-row gap-4 justify-between">
           <div className="flex bg-slate-100 p-1 rounded-xl">
             <button onClick={() => setMode('flare')} className={`flex-1 py-2 px-4 rounded-lg text-sm font-bold transition-all ${mode === 'flare' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500'}`}>Flare</button>
@@ -87,21 +90,34 @@ const App = () => {
           </div>
         </div>
 
+        {/* Search */}
         <div className="relative mb-8">
-          <input type="text" className="w-full bg-white border border-slate-200 rounded-2xl py-5 pl-6 pr-32 outline-none shadow-md text-lg" placeholder="Search (e.g. Oats, Bagel)..." value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} />
-          <button onClick={handleSearch} disabled={loading} className="absolute right-2 top-2 bottom-2 bg-indigo-600 text-white px-6 rounded-xl font-bold">
+          <input 
+            type="text" 
+            className="w-full bg-white border border-slate-200 rounded-2xl py-5 pl-6 pr-32 outline-none shadow-md text-lg focus:ring-2 focus:ring-indigo-500 transition-all" 
+            placeholder="Search (e.g. Oats, Pizza)..." 
+            value={query} 
+            onChange={(e) => setQuery(e.target.value)} 
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()} 
+          />
+          <button onClick={handleSearch} disabled={loading} className="absolute right-2 top-2 bottom-2 bg-indigo-600 text-white px-6 rounded-xl font-bold hover:bg-indigo-700 transition-colors">
             {loading ? <RefreshCw className="animate-spin w-5 h-5" /> : "Analyze"}
           </button>
         </div>
 
-        {error && <div className="bg-rose-50 border border-rose-200 p-4 rounded-2xl text-rose-700 mb-6 text-sm font-medium">⚠️ {error}</div>}
+        {error && <div className="bg-rose-50 border border-rose-200 p-4 rounded-2xl text-rose-700 mb-6 text-sm font-medium animate-pulse">⚠️ {error}</div>}
 
         {result && !loading && (
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in duration-500">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in duration-300">
             <div className={`p-6 border-b flex items-center justify-between ${getScoreColor(result.score)}`}>
-              <div>
-                <h2 className="text-2xl font-bold">{result.foodName}</h2>
-                <p className="text-[10px] font-black uppercase opacity-70 tracking-widest">{mode} {isCoeliac ? "• Coeliac" : ""}</p>
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-white/50 rounded-2xl">
+                  {result.status === 'Safe' ? <CheckCircle className="w-8 h-8" /> : result.status === 'Caution' ? <HelpCircle className="w-8 h-8" /> : <AlertTriangle className="w-8 h-8" />}
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold">{result.foodName}</h2>
+                  <p className="text-[10px] font-black uppercase opacity-70 tracking-widest">{mode} {isCoeliac ? "• Coeliac" : ""}</p>
+                </div>
               </div>
               <div className="text-center font-black">
                 <div className="text-4xl">{result.score}</div>
@@ -109,13 +125,13 @@ const App = () => {
               </div>
             </div>
             <div className="p-6 space-y-6 text-sm">
-              <p className="text-slate-700 leading-relaxed">{result.reasoning}</p>
+              <p className="text-slate-700 leading-relaxed italic border-l-2 border-indigo-100 pl-4">{result.reasoning}</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-50">
-                <div><h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 italic">Tips</h3>
-                  <ul className="space-y-2">{result.tips?.map((t, i) => <li key={i} className="text-slate-600">• {t}</li>)}</ul>
+                <div><h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 underline">Dietary Tips</h3>
+                  <ul className="space-y-2">{result.tips?.map((t, i) => <li key={i} className="text-slate-600 flex items-start gap-2"><span>•</span> {t}</li>)}</ul>
                 </div>
-                <div><h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 italic">Swaps</h3>
-                  <div className="flex flex-wrap gap-2">{result.alternatives?.map((a, i) => <span key={i} className="bg-slate-50 text-slate-600 px-3 py-1 rounded-lg text-[10px] font-bold border border-slate-200">{a}</span>)}</div>
+                <div><h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 underline">Swaps</h3>
+                  <div className="flex flex-wrap gap-2">{result.alternatives?.map((a, i) => <span key={i} className="bg-slate-50 text-slate-600 px-3 py-1 rounded-lg text-[10px] font-bold border border-slate-200 uppercase">{a}</span>)}</div>
                 </div>
               </div>
             </div>
