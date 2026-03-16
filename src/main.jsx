@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import App from './App.jsx' // Note: NO "src/" here, just "./"
+import App from './App' // We removed .jsx and src/ to make it "foolproof"
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
