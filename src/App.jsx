@@ -18,7 +18,7 @@ const App = () => {
     setResult(null);
     
     // We are using the most widely accepted stable model name
-    const modelName = "gemini-1.5-flash"; 
+    const modelName = "gemini-2.5-flash"; 
     
     const modeDesc = mode === 'flare' ? "active IBD flare (low-residue)" : "IBD remission (anti-inflammatory)";
     const coeliacLogic = isCoeliac 
