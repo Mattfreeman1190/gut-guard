@@ -18,7 +18,7 @@ const App = () => {
     setResult(null);
     
     // Stable production model for 2026
-    const modelVersion = "gemini-2.0-flash"; 
+    const modelVersion = "gemini-1.5-flash"; 
     
     const modeDesc = mode === 'flare' ? "active IBD flare-up (low-residue diet)" : "IBD remission (anti-inflammatory/Mediterranean focus)";
     
