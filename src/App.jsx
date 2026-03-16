@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Info, AlertTriangle, CheckCircle, Flame, Shield, HelpCircle, ExternalLink, RefreshCw, WheatOff } from 'lucide-react';
+import { Shield, Flame, WheatOff, RefreshCw, AlertTriangle, CheckCircle, HelpCircle } from 'lucide-react';
 
 const App = () => {
   const [query, setQuery] = useState("");
@@ -11,48 +11,46 @@ const App = () => {
 
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-  const handleSearch = async (foodName = query) => {
-    if (!foodName.trim()) return;
+  const handleSearch = async () => {
+    if (!query.trim()) return;
     setLoading(true);
     setError("");
     setResult(null);
     
-    // Most compatible model name for free tier keys
-    const modelName = "gemini-1.5-flash"; 
+    // Using the -latest suffix is the secret to fixing the "not found" error
+    const modelName = "gemini-1.5-flash-latest"; 
     
-    const modeDesc = mode === 'flare' ? "active IBD flare-up (low-residue)" : "IBD remission (anti-inflammatory)";
+    const modeDesc = mode === 'flare' ? "active IBD flare (low-residue)" : "IBD remission (anti-inflammatory)";
     const coeliacLogic = isCoeliac 
-      ? `User has Coeliac. 1. If "${foodName}" is a known gluten brand (e.g. Weetabix), score 0. 2. If generic, assume GF version.` 
-      : "No Coeliac disease.";
-    
-    const prompt = `Analyze ${foodName} for IBD ${modeDesc}. ${coeliacLogic} 
-    Return ONLY JSON: {"foodName": "${foodName}", "score": 0-100, "status": "Safe"|"Caution"|"Avoid", "reasoning": "string", "tips": ["string"], "alternatives": ["string"], "references": ["string"]}`;
+      ? `User has Coeliac. 1. If "${query}" is a gluten-containing brand (e.g. Weetabix), score 0. 2. If generic, assume GF version.` 
+      : "No Coeliac.";
+
+    const prompt = `Analyze ${query} for IBD ${modeDesc}. ${coeliacLogic} 
+    Return ONLY JSON: {"foodName": "${query}", "score": 0-100, "status": "Safe"|"Caution"|"Avoid", "reasoning": "string", "tips": ["string"], "alternatives": ["string"], "references": ["string"]}`;
 
     try {
-      if (!apiKey) throw new Error("API Key missing from Vercel settings.");
+      if (!apiKey) throw new Error("API Key missing from Vercel. Add VITE_GEMINI_API_KEY to Environment Variables.");
 
-      // Using v1beta which is the most reliable for flash models
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        body: JSON.stringify({ 
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { response_mime_type: "application/json" } // This forces JSON output in 2026
+        })
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error?.message || "Connection failed.");
+        throw new Error(data.error?.message || "Google API Error. Check your key.");
       }
 
+      // Modern Gemini 1.5/2.0 returns text which we then parse
       const rawText = data.candidates[0].content.parts[0].text;
-      const start = rawText.indexOf('{');
-      const end = rawText.lastIndexOf('}') + 1;
-      const jsonString = rawText.slice(start, end);
-      
-      setResult(JSON.parse(jsonString));
+      setResult(JSON.parse(rawText));
     } catch (err) {
-      // If it still says quota exceeded, it's a Google account activation delay
-      setError(err.message.includes("quota") ? "Google is still activating your free key. Please wait 10-15 minutes." : err.message);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -71,62 +69,58 @@ const App = () => {
           <div className="inline-flex p-3 bg-indigo-600 rounded-2xl shadow-lg mb-4 text-white">
             <Shield className="w-8 h-8" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-800">Gut Guard</h1>
-          <p className="text-slate-500 mt-2 font-medium">Precision IBD & Coeliac Assistant</p>
+          <h1 className="text-3xl font-bold tracking-tight">Gut Guard</h1>
+          <p className="text-slate-500 mt-1">Clinical IBD & Coeliac Assistant</p>
         </header>
 
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mb-6 space-y-4">
-          <div className="flex flex-col sm:flex-row justify-between gap-4">
-            <div className="flex bg-slate-100 p-1 rounded-xl">
-              <button onClick={() => setMode('flare')} className={`flex-1 py-2 px-4 rounded-lg text-sm font-bold transition-all ${mode === 'flare' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500'}`}>Flare</button>
-              <button onClick={() => setMode('remission')} className={`flex-1 py-2 px-4 rounded-lg text-sm font-bold transition-all ${mode === 'remission' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500'}`}>Remission</button>
-            </div>
-            <div className="flex items-center justify-between gap-3 bg-slate-50 p-2 rounded-xl border border-slate-100 px-4">
-              <div className="flex items-center gap-2">
-                <WheatOff className={`w-4 h-4 ${isCoeliac ? 'text-amber-600' : 'text-slate-400'}`} />
-                <span className={`text-sm font-bold ${isCoeliac ? 'text-slate-800' : 'text-slate-400'}`}>Coeliac Mode</span>
-              </div>
-              <button onClick={() => setIsCoeliac(!isCoeliac)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isCoeliac ? 'bg-amber-500' : 'bg-slate-300'}`}>
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isCoeliac ? 'translate-x-6' : 'translate-x-1'}`} />
-              </button>
-            </div>
+        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mb-6 flex flex-col sm:flex-row gap-4 justify-between">
+          <div className="flex bg-slate-100 p-1 rounded-xl">
+            <button onClick={() => setMode('flare')} className={`flex-1 py-2 px-4 rounded-lg text-sm font-bold transition-all ${mode === 'flare' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500'}`}>Flare</button>
+            <button onClick={() => setMode('remission')} className={`flex-1 py-2 px-4 rounded-lg text-sm font-bold transition-all ${mode === 'remission' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500'}`}>Remission</button>
+          </div>
+          <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-xl border px-4">
+            <WheatOff className={`w-4 h-4 ${isCoeliac ? 'text-amber-600' : 'text-slate-400'}`} />
+            <span className="text-sm font-bold">Coeliac Mode</span>
+            <button onClick={() => setIsCoeliac(!isCoeliac)} className={`relative h-6 w-11 rounded-full transition-colors ${isCoeliac ? 'bg-amber-500' : 'bg-slate-300'}`}>
+              <span className={`h-4 w-4 transform rounded-full bg-white absolute top-1 transition-all ${isCoeliac ? 'left-6' : 'left-1'}`} />
+            </button>
           </div>
         </div>
 
         <div className="relative mb-8">
-          <input type="text" className="w-full bg-white border border-slate-200 rounded-2xl py-5 pl-6 pr-32 outline-none shadow-md focus:ring-2 focus:ring-indigo-500 text-lg" placeholder="Search food (e.g. Oats)..." value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} />
-          <button onClick={() => handleSearch()} disabled={loading} className="absolute right-2 top-2 bottom-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 rounded-xl font-bold flex items-center gap-2">
-            {loading ? <RefreshCw className="w-5 h-5 animate-spin" /> : "Analyze"}
+          <input type="text" className="w-full bg-white border border-slate-200 rounded-2xl py-5 pl-6 pr-32 outline-none shadow-md text-lg" placeholder="Search (e.g. Oats, Bagel)..." value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} />
+          <button onClick={handleSearch} disabled={loading} className="absolute right-2 top-2 bottom-2 bg-indigo-600 text-white px-6 rounded-xl font-bold">
+            {loading ? <RefreshCw className="animate-spin w-5 h-5" /> : "Analyze"}
           </button>
         </div>
 
-        {error && <div className="bg-rose-50 border border-rose-200 p-4 rounded-2xl text-rose-700 mb-6 text-sm font-medium animate-pulse">⚠️ {error}</div>}
+        {error && <div className="bg-rose-50 border border-rose-200 p-4 rounded-2xl text-rose-700 mb-6 text-sm font-medium">⚠️ {error}</div>}
 
         {result && !loading && (
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in duration-300">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in duration-500">
             <div className={`p-6 border-b flex items-center justify-between ${getScoreColor(result.score)}`}>
               <div>
                 <h2 className="text-2xl font-bold">{result.foodName}</h2>
                 <p className="text-[10px] font-black uppercase opacity-70 tracking-widest">{mode} {isCoeliac ? "• Coeliac" : ""}</p>
               </div>
-              <div className="text-center"><div className="text-4xl font-black">{result.score}</div><div className="text-[10px] font-bold opacity-60">SCORE</div></div>
+              <div className="text-center font-black">
+                <div className="text-4xl">{result.score}</div>
+                <div className="text-[10px] opacity-60">SCORE</div>
+              </div>
             </div>
-            <div className="p-6 space-y-6">
-              <p className="text-slate-700 text-sm leading-relaxed">{result.reasoning}</p>
+            <div className="p-6 space-y-6 text-sm">
+              <p className="text-slate-700 leading-relaxed">{result.reasoning}</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-50">
-                <div><h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 italic">Tips</h3>
-                  <ul className="space-y-2">{result.tips?.map((t, i) => <li key={i} className="text-xs text-slate-600">• {t}</li>)}</ul>
+                <div><h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 italic">Tips</h3>
+                  <ul className="space-y-2">{result.tips?.map((t, i) => <li key={i} className="text-slate-600">• {t}</li>)}</ul>
                 </div>
-                <div><h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 italic">Swaps</h3>
+                <div><h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 italic">Swaps</h3>
                   <div className="flex flex-wrap gap-2">{result.alternatives?.map((a, i) => <span key={i} className="bg-slate-50 text-slate-600 px-3 py-1 rounded-lg text-[10px] font-bold border border-slate-200">{a}</span>)}</div>
                 </div>
               </div>
             </div>
           </div>
         )}
-        <footer className="mt-12 text-center text-[9px] text-slate-400 uppercase tracking-widest leading-loose">
-          Not medical advice. Consult a doctor for dietary changes.
-        </footer>
       </div>
     </div>
   );
